@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClassLab IDE — Code, Test & Deploy with GitHub</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+  <style>
+:root {
+  --bg: #1e1f22;
+  --bg-2: #2b2d30;
+  --bg-3: #313438;
+  --bg-hover: #393b40;
+  --border: #1b1c1e;
+  --border-2: #43454a;
+  --text: #dfe1e5;
+  --text-dim: #9da0a8;
+  --accent: #4a8bf0;
+  --green: #4caf68;
+  --green-2: #3d8c52;
+  --orange: #d9803f;
+  --red: #e06c60;
+  --purple: #9b7bd4;
+  --yellow: #d6b15b;
+  --mono: "JetBrains Mono", "SF Mono", "Cascadia Code", Consolas, monospace;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 13px;
+  overflow: hidden;
+}
+
+button { font-family: inherit; }
+
+/* ============ Toolbar ============ */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 10px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+.toolbar-left, .toolbar-center, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.logo { color: var(--accent); font-size: 16px; }
+.app-name { font-weight: 600; letter-spacing: .2px; }
+.divider { width: 1px; height: 22px; background: var(--border-2); margin: 0 4px; }
+
+.lang-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.lang-select select {
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.btn {
+  background: var(--bg-3);
+  color: var(--text);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  padding: 6px 11px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background .12s, border-color .12s;
+}
+.btn:hover { background: var(--bg-hover); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-run { background: var(--green-2); border-color: var(--green); }
+.btn-run:hover { background: var(--green); }
+.btn-push { background: #355a8c; border-color: var(--accent); }
+.btn-push:hover { background: #3f6ba6; }
+.btn-deploy { background: #6f4a99; border-color: var(--purple); }
+.btn-deploy:hover { background: #815bad; }
+.btn-ghost { background: transparent; border-color: transparent; font-size: 15px; }
+.btn-ghost:hover { background: var(--bg-hover); }
+
+.conn-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+.conn-off { color: var(--text-dim); }
+.conn-on { color: var(--green); }
+.conn-err { color: var(--red); }
+
+/* ============ Layout ============ */
+.layout {
+  display: flex;
+  height: calc(100% - 44px - 24px);
+}
+
+.sidebar {
+  width: 240px;
+  min-width: 160px;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .6px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.sidebar-section { border-top: 1px solid var(--border); margin-top: 6px; }
+.panel-actions { display: flex; gap: 2px; }
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text); }
+
+.file-tree { list-style: none; margin: 0; padding: 0 4px; }
+.file-tree li {
+  padding: 4px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-tree li:hover { background: var(--bg-hover); }
+.file-tree li.active { background: #2d4a73; }
+.file-tree li.hint { color: var(--text-dim); cursor: default; font-style: italic; }
+.file-tree li.hint:hover { background: transparent; }
+.file-icon { opacity: .8; }
+.file-icon.py { color: var(--yellow); }
+.file-icon.js { color: var(--orange); }
+.file-icon.other { color: var(--text-dim); }
+
+/* ============ Workspace ============ */
+.workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tabs {
+  display: flex;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  min-height: 32px;
+  overflow-x: auto;
+}
+.tab {
+  padding: 7px 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.tab.active { background: var(--bg); color: var(--text); }
+.tab .close { opacity: .6; }
+.tab .close:hover { opacity: 1; }
+
+.editor-wrap { flex: 1; position: relative; min-height: 0; }
+#editor { width: 100%; height: 100%; }
+.readonly-badge {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  background: var(--orange);
+  color: #1e1f22;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  z-index: 5;
+}
+
+/* ============ Console ============ */
+.console {
+  height: 220px;
+  min-height: 36px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  resize: vertical;
+  overflow: hidden;
+}
+.console-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+.console-tabs { display: flex; }
+.console-tab {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.console-tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.console-head .icon-btn { margin-right: 8px; }
+
+.console-body {
+  flex: 1;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.console-body .ok { color: var(--green); }
+.console-body .err { color: var(--red); }
+.console-body .warn { color: var(--yellow); }
+.console-body .info { color: var(--accent); }
+.console-body .dim { color: var(--text-dim); }
+
+/* ============ Status bar ============ */
+.statusbar {
+  height: 24px;
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.statusbar .spacer { flex: 1; }
+
+/* ============ Modals ============ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--bg-2);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  width: 460px;
+  max-width: 92vw;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+}
+.modal-sm { width: 380px; }
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h2 { margin: 0; font-size: 15px; }
+.modal-body { padding: 16px 18px; }
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
+.field span { font-size: 12px; color: var(--text-dim); }
+.field small { opacity: .8; }
+.field input {
+  background: var(--bg-3);
+  border: 1px solid var(--border-2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 13px;
+}
+.field input:focus { outline: none; border-color: var(--accent); }
+.modal-note {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: var(--bg-3);
+  border-radius: 6px;
+  padding: 9px 11px;
+  line-height: 1.5;
+}
+.modal-note code { color: var(--yellow); }
+.settings-result { font-size: 12px; margin-top: 10px; min-height: 16px; }
+.settings-result.ok { color: var(--green); }
+.settings-result.err { color: var(--red); }
+
+/* ============ Loading ============ */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 31, 34, .7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 200;
+  color: var(--text);
+}
+.spinner {
+  width: 38px;
+  height: 38px;
+  border: 3px solid var(--border-2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hidden { display: none !important; }
+
+</style>
+</head>
+<body>
+  <!-- ============ Top toolbar ============ -->
+  <header class="toolbar">
+    <div class="toolbar-left">
+      <span class="logo">&#9650;</span>
+      <span class="app-name">ClassLab&nbsp;IDE</span>
+      <span class="divider"></span>
+      <label class="lang-select">
+        Language
+        <select id="languageSelect">
+          <option value="python">Python</option>
+          <option value="javascript">JavaScript</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="toolbar-center">
+      <button id="btnValidate" class="btn" title="Check the code for syntax errors">
+        &#10003; Validate
+      </button>
+      <button id="btnRun" class="btn btn-run" title="Run the current file">
+        &#9654; Run
+      </button>
+      <button id="btnTest" class="btn" title="Run the project tests">
+        &#9881; Test
+      </button>
+      <span class="divider"></span>
+      <button id="btnPull" class="btn" title="Pull the latest files from GitHub">
+        &#8595; Pull
+      </button>
+      <button id="btnPush" class="btn btn-push" title="Commit &amp; push your files to GitHub">
+        &#8593; Push
+      </button>
+      <button id="btnDeploy" class="btn btn-deploy" title="Deploy to GitHub Pages">
+        &#9729; Deploy
+      </button>
+      <button id="btnBrowse" class="btn" title="Browse classmates' projects">
+        &#128101; Classmates
+      </button>
+    </div>
+
+    <div class="toolbar-right">
+      <span id="connStatus" class="conn-status conn-off" title="GitHub connection status">
+        &#9679; Offline
+      </span>
+      <button id="btnSettings" class="btn btn-ghost" title="GitHub settings">
+        &#9881;
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ Main body ============ -->
+  <main class="layout">
+    <!-- Sidebar: file explorer -->
+    <aside class="sidebar" id="sidebar">
+      <div class="panel-head">
+        <span>Project</span>
+        <div class="panel-actions">
+          <button id="btnNewFile" class="icon-btn" title="New file">+</button>
+          <button id="btnDeleteFile" class="icon-btn" title="Delete current file">&#128465;</button>
+        </div>
+      </div>
+      <ul class="file-tree" id="fileTree"></ul>
+
+      <div class="panel-head sidebar-section">
+        <span>Classmates</span>
+      </div>
+      <ul class="file-tree" id="classmatesTree">
+        <li class="hint">Click "Classmates" to browse.</li>
+      </ul>
+    </aside>
+
+    <!-- Editor + console -->
+    <section class="workspace">
+      <div class="tabs" id="tabs"></div>
+
+      <div class="editor-wrap">
+        <div id="editor"></div>
+        <div id="readonlyBadge" class="readonly-badge hidden">Read-only (classmate's file)</div>
+      </div>
+
+      <!-- Resizable console -->
+      <div class="console" id="console">
+        <div class="console-head">
+          <div class="console-tabs">
+            <button class="console-tab active" data-tab="output">Output</button>
+            <button class="console-tab" data-tab="problems">Problems</button>
+            <button class="console-tab" data-tab="git">Git Log</button>
+          </div>
+          <button id="btnClearConsole" class="icon-btn" title="Clear">Clear</button>
+        </div>
+        <pre class="console-body" id="consoleOutput"></pre>
+        <pre class="console-body hidden" id="consoleProblems"></pre>
+        <pre class="console-body hidden" id="consoleGit"></pre>
+      </div>
+    </section>
+  </main>
+
+  <!-- Status bar -->
+  <footer class="statusbar">
+    <span id="statusFile">&mdash;</span>
+    <span id="statusLang">python</span>
+    <span id="statusRuntime">Runtime: loading&hellip;</span>
+    <span class="spacer"></span>
+    <span id="statusProject">No project</span>
+  </footer>
+
+  <!-- ============ Settings modal ============ -->
+  <div class="modal-backdrop hidden" id="settingsModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2>GitHub Connection</h2>
+        <button class="icon-btn" id="btnCloseSettings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span>Personal Access Token <small>(classic: scope <code>repo</code>)</small></span>
+          <input type="password" id="cfgToken" placeholder="ghp_xxxxxxxxxxxxxxxx" />
+        </label>
+        <label class="field">
+          <span>Your Repository <small>(owner/repo)</small></span>
+          <input type="text" id="cfgRepo" placeholder="Pinnxxx/my-classlab-project" />
+        </label>
+        <label class="field">
+          <span>Branch</span>
+          <input type="text" id="cfgBranch" value="main" />
+        </label>
+        <label class="field">
+          <span>Classmates Org or Username <small>(optional)</small></span>
+          <input type="text" id="cfgOrg" placeholder="my-class-org" />
+        </label>
+        <p class="modal-note">
+          Your token is stored only in <strong>this browser</strong> (localStorage) and is sent
+          directly to GitHub. Use a token with the <code>repo</code> scope and an expiry date.
+        </p>
+        <div id="settingsResult" class="settings-result"></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="btnTestConn">Test Connection</button>
+        <button class="btn btn-run" id="btnSaveSettings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Generic prompt modal ============ -->
+  <div class="modal-backdrop hidden" id="promptModal">
+    <div class="modal modal-sm">
+      <div class="modal-head">
+        <h2 id="promptTitle">Input</h2>
+        <button class="icon-btn" id="btnClosePrompt">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span id="promptLabel">Value</span>
+          <input type="text" id="promptInput" />
+        </label>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" id="btnCancelPrompt">Cancel</button>
+        <button class="btn btn-run" id="btnConfirmPrompt">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div id="loadingText">Working&hellip;</div>
+  </div>
+
+  <!-- Monaco loader + Pyodide -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script>
+    window.PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.4/full/";
+    window.MONACO_BASE = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs";
+  </script>
+  <script>
+/* Central state + persistence for ClassLab IDE */
+(function () {
+  "use strict";
+
+  const CONFIG_KEY = "classlab.config";
+  const FILES_KEY = "classlab.files";
+
+  const DEFAULT_CONFIG = {
+    token: "",
+    repo: "",     // "owner/repo"
+    branch: "main",
+    org: "",      // classmates: GitHub organization (or a username for fallback)
+  };
+
+  // Starter files so students always have something to run.
+  const SAMPLE_PYTHON = {
+    "main.py": [
+      "def greet(name):",
+      '    """Return a friendly greeting."""',
+      '    return f"Hello, {name}! Welcome to ClassLab."',
+      "",
+      "",
+      "def add(a, b):",
+      "    return a + b",
+      "",
+      "",
+      'if __name__ == "__main__":',
+      '    print(greet("Student"))',
+      "    print(\"2 + 3 =\", add(2, 3))",
+      "",
+    ].join("\n"),
+    "test_main.py": [
+      "import unittest",
+      "from main import greet, add",
+      "",
+      "",
+      "class TestMain(unittest.TestCase):",
+      "    def test_add(self):",
+      "        self.assertEqual(add(2, 3), 5)",
+      "",
+      "    def test_greet(self):",
+      '        self.assertIn("Hello", greet("Sam"))',
+      "",
+      "",
+      'if __name__ == "__main__":',
+      "    unittest.main()",
+      "",
+    ].join("\n"),
+    "README.md": "# My ClassLab Project\n\nEdit `main.py`, validate, run, test, then push to GitHub.\n",
+  };
+
+  const SAMPLE_JS = {
+    "main.js": [
+      "function greet(name) {",
+      "  return `Hello, ${name}! Welcome to ClassLab.`;",
+      "}",
+      "",
+      "function add(a, b) {",
+      "  return a + b;",
+      "}",
+      "",
+      'console.log(greet("Student"));',
+      'console.log("2 + 3 =", add(2, 3));',
+      "",
+      "// Exposed so the test runner can reach them",
+      "globalThis.greet = greet;",
+      "globalThis.add = add;",
+      "",
+    ].join("\n"),
+    "main.test.js": [
+      "test('add returns the sum', () => {",
+      "  assertEqual(add(2, 3), 5);",
+      "});",
+      "",
+      "test('greet includes Hello', () => {",
+      "  assert(greet('Sam').includes('Hello'));",
+      "});",
+      "",
+    ].join("\n"),
+    "README.md": "# My ClassLab Project\n\nEdit `main.js`, validate, run, test, then push to GitHub.\n",
+  };
+
+  const Store = {
+    config: Object.assign({}, DEFAULT_CONFIG),
+    files: {},          // { filename: content }
+    activeFile: null,
+    language: "python", // python | javascript
+
+    loadConfig() {
+      try {
+        const raw = localStorage.getItem(CONFIG_KEY);
+        if (raw) this.config = Object.assign({}, DEFAULT_CONFIG, JSON.parse(raw));
+      } catch (e) { /* ignore */ }
+      return this.config;
+    },
+    saveConfig(cfg) {
+      this.config = Object.assign({}, this.config, cfg);
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(this.config));
+    },
+
+    loadFiles() {
+      try {
+        const raw = localStorage.getItem(FILES_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          this.files = data.files || {};
+          this.language = data.language || "python";
+          this.activeFile = data.activeFile || Object.keys(this.files)[0] || null;
+          if (Object.keys(this.files).length) return;
+        }
+      } catch (e) { /* ignore */ }
+      this.resetSample(this.language);
+    },
+    saveFiles() {
+      localStorage.setItem(FILES_KEY, JSON.stringify({
+        files: this.files,
+        language: this.language,
+        activeFile: this.activeFile,
+      }));
+    },
+
+    resetSample(language) {
+      this.language = language;
+      this.files = JSON.parse(JSON.stringify(language === "javascript" ? SAMPLE_JS : SAMPLE_PYTHON));
+      this.activeFile = language === "javascript" ? "main.js" : "main.py";
+      this.saveFiles();
+    },
+
+    setFile(name, content) {
+      this.files[name] = content;
+      this.saveFiles();
+    },
+    deleteFile(name) {
+      delete this.files[name];
+      if (this.activeFile === name) {
+        this.activeFile = Object.keys(this.files)[0] || null;
+      }
+      this.saveFiles();
+    },
+    replaceAll(files, activeFile) {
+      this.files = files;
+      this.activeFile = activeFile || Object.keys(files)[0] || null;
+      this.saveFiles();
+    },
+  };
+
+  window.Store = Store;
+})();
+
+</script>
+  <script>
+/* GitHub REST API client (browser-only, no git binary needed).
+   Uses a Personal Access Token sent directly to api.github.com. */
+(function () {
+  "use strict";
+
+  const API = "https://api.github.com";
+
+  function enc(s) { return encodeURIComponent(s); }
+  function encPath(p) { return p.split("/").map(encodeURIComponent).join("/"); }
+
+  function b64DecodeUtf8(b64) {
+    const bin = atob((b64 || "").replace(/\n/g, ""));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  async function api(path, opts = {}) {
+    const token = Store.config.token;
+    if (!token) throw new Error("No GitHub token set. Open Settings (gear icon).");
+    const headers = Object.assign(
+      {
+        "Authorization": "Bearer " + token,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      opts.body ? { "Content-Type": "application/json" } : {},
+      opts.headers || {}
+    );
+    let res;
+    try {
+      res = await fetch(API + path, { method: opts.method || "GET", headers, body: opts.body });
+    } catch (e) {
+      throw new Error(
+        "Network/CORS error reaching GitHub. If you opened the file directly, " +
+        "serve it over http:// or host it on GitHub Pages. (" + e.message + ")"
+      );
+    }
+    if (opts.allow404 && res.status === 404) return null;
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.json()).message || ""; } catch (_) { detail = await res.text(); }
+      throw new Error("GitHub API " + res.status + ": " + detail);
+    }
+    if (res.status === 204) return null;
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  }
+
+  function owner(repoFull) { return (repoFull || "").split("/")[0]; }
+  function name(repoFull) { return (repoFull || "").split("/")[1] || ""; }
+
+  const GitHub = {
+    /* ---- identity / connection ---- */
+    async currentUser() { return api("/user"); },
+
+    /* ---- repo info ---- */
+    async getRepo(repoFull) { return api("/repos/" + repoFull); },
+
+    /* ---- resolve a branch to its tree SHA ---- */
+    async refSha(repoFull, branch) {
+      const ref = await api("/repos/" + repoFull + "/git/ref/heads/" + enc(branch), { allow404: true });
+      return ref ? ref.object.sha : null;
+    },
+    async treeShaForBranch(repoFull, branch) {
+      const sha = await this.refSha(repoFull, branch);
+      if (!sha) return null;
+      const commit = await api("/repos/" + repoFull + "/git/commits/" + sha);
+      return commit.tree.sha;
+    },
+
+    /* ---- list every file path (recursive) ---- */
+    async listTree(repoFull, branch) {
+      const treeSha = await this.treeShaForBranch(repoFull, branch);
+      if (!treeSha) return [];
+      const data = await api("/repos/" + repoFull + "/git/trees/" + treeSha + "?recursive=1");
+      return (data.tree || []).filter((t) => t.type === "blob").map((t) => t.path);
+    },
+
+    /* ---- read one file's content ---- */
+    async getFileRaw(repoFull, path, branch) {
+      const data = await api(
+        "/repos/" + repoFull + "/contents/" + encPath(path) + "?ref=" + enc(branch)
+      );
+      if (data && data.content != null) return b64DecodeUtf8(data.content);
+      return "";
+    },
+
+    /* ---- pull everything into {name: content} ---- */
+    async pullFiles(repoFull, branch) {
+      const paths = await this.listTree(repoFull, branch);
+      const files = {};
+      for (const p of paths) files[p] = await this.getFileRaw(repoFull, p, branch);
+      return files;
+    },
+
+    /* ---- commit (push) many files in a single commit (Git Data API) ---- */
+    async commitFiles(repoFull, branch, message, files) {
+      const parentSha = await this.refSha(repoFull, branch);
+      let baseTree = null;
+      const parents = [];
+      if (parentSha) {
+        parents.push(parentSha);
+        const parentCommit = await api("/repos/" + repoFull + "/git/commits/" + parentSha);
+        baseTree = parentCommit.tree.sha;
+      }
+      const treeEntries = Object.keys(files).map((path) => ({
+        path: path,
+        mode: "100644",
+        type: "blob",
+        content: files[path],
+      }));
+      if (!treeEntries.length) throw new Error("No files to commit.");
+
+      const treeBody = { tree: treeEntries };
+      if (baseTree) treeBody.base_tree = baseTree;
+      const tree = await api("/repos/" + repoFull + "/git/trees", {
+        method: "POST", body: JSON.stringify(treeBody),
+      });
+
+      const commit = await api("/repos/" + repoFull + "/git/commits", {
+        method: "POST",
+        body: JSON.stringify({ message, tree: tree.sha, parents }),
+      });
+
+      if (parentSha) {
+        await api("/repos/" + repoFull + "/git/refs/heads/" + enc(branch), {
+          method: "PATCH", body: JSON.stringify({ sha: commit.sha, force: false }),
+        });
+      } else {
+        await api("/repos/" + repoFull + "/git/refs", {
+          method: "POST",
+          body: JSON.stringify({ ref: "refs/heads/" + branch, sha: commit.sha }),
+        });
+      }
+      return commit; // has .sha, .html_url
+    },
+
+    /* ---- classmates: list repos in an organization ---- */
+    async listOrgRepos(org) {
+      return api("/orgs/" + enc(org) + "/repos?per_page=100&sort=full_name&type=all");
+    },
+    /* ---- fallback: list a user's public repos ---- */
+    async listUserRepos(user) {
+      return api("/users/" + enc(user) + "/repos?per_page=100&sort=full_name");
+    },
+
+    /* ---- GitHub Pages ---- */
+    async getPages(repoFull) {
+      return api("/repos/" + repoFull + "/pages", { allow404: true });
+    },
+    async enablePages(repoFull, branch) {
+      // source = branch root; serves index.html at the site root.
+      return api("/repos/" + repoFull + "/pages", {
+        method: "POST",
+        body: JSON.stringify({ source: { branch: branch, path: "/" } }),
+      });
+    },
+    pagesUrl(repoFull) {
+      return "https://" + owner(repoFull) + ".github.io/" + name(repoFull) + "/";
+    },
+    actionsUrl(repoObj) { return repoObj.html_url + "/actions"; },
+    commitsUrl(repoObj) { return repoObj.html_url + "/commits"; },
+  };
+
+  window.GitHub = GitHub;
+})();
+
+</script>
+  <script>
+/* Code execution + validation + testing, fully in the browser.
+   Python  -> Pyodide (WebAssembly)
+   JS      -> sandboxed Function with captured console + tiny test harness */
+(function () {
+  "use strict";
+
+  let pyodide = null;
+  let pyodideLoading = null;
+
+  function loadPyodideOnce(onStatus) {
+    if (pyodide) return Promise.resolve(pyodide);
+    if (pyodideLoading) return pyodideLoading;
+    pyodideLoading = (async () => {
+      onStatus && onStatus("Loading Python runtime…");
+      await loadScript(window.PYODIDE_URL + "pyodide.js");
+      pyodide = await window.loadPyodide({ indexURL: window.PYODIDE_URL });
+      onStatus && onStatus("Python ready");
+      return pyodide;
+    })();
+    return pyodideLoading;
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      if (document.querySelector('script[data-src="' + src + '"]')) return resolve();
+      const s = document.createElement("script");
+      s.src = src;
+      s.dataset.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error("Failed to load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  /* Write the in-memory project into Pyodide's virtual filesystem
+     so that imports between files work. */
+  function syncPyFiles(py, files) {
+    Object.keys(files).forEach((name) => {
+      try { py.FS.writeFile(name, files[name]); } catch (e) { /* ignore */ }
+    });
+  }
+
+  const Runner = {
+    isReady() { return !!pyodide; },
+    preload(onStatus) {
+      if (Store.language === "python") return loadPyodideOnce(onStatus);
+      onStatus && onStatus("JavaScript ready");
+      return Promise.resolve();
+    },
+
+    /* ---------- VALIDATE (syntax only) ---------- */
+    async validate(files, entry, language) {
+      if (language === "python") {
+        const py = await loadPyodideOnce();
+        syncPyFiles(py, files);
+        const src = files[entry] || "";
+        py.globals.set("__src", src);
+        py.globals.set("__name", entry);
+        const result = py.runPython(`
+import json
+try:
+    compile(__src, __name, "exec")
+    _r = {"ok": True}
+except SyntaxError as e:
+    _r = {"ok": False, "line": e.lineno, "col": e.offset, "msg": e.msg}
+json.dumps(_r)
+`);
+        return JSON.parse(result);
+      }
+      // JavaScript: use Function to parse without executing.
+      try {
+        // eslint-disable-next-line no-new-func
+        new Function(files[entry] || "");
+        return { ok: true };
+      } catch (e) {
+        const m = /(\d+):(\d+)/.exec(e.stack || "");
+        return { ok: false, msg: e.message, line: m ? +m[1] : null };
+      }
+    },
+
+    /* ---------- RUN ---------- */
+    async run(files, entry, language, onOut) {
+      if (language === "python") {
+        const py = await loadPyodideOnce();
+        syncPyFiles(py, files);
+        let buffer = "";
+        py.setStdout({ batched: (s) => { buffer += s + "\n"; onOut(s, "out"); } });
+        py.setStderr({ batched: (s) => { buffer += s + "\n"; onOut(s, "err"); } });
+        try {
+          await py.runPythonAsync(files[entry] || "");
+          return { ok: true, output: buffer };
+        } catch (e) {
+          onOut(String(e.message || e), "err");
+          return { ok: false, error: String(e.message || e) };
+        }
+      }
+      return runJs(files[entry] || "", onOut);
+    },
+
+    /* ---------- TEST ---------- */
+    async test(files, language, onOut) {
+      if (language === "python") {
+        const py = await loadPyodideOnce();
+        syncPyFiles(py, files);
+        const testModules = Object.keys(files)
+          .filter((f) => /^test_.*\.py$|_test\.py$/.test(f))
+          .map((f) => f.replace(/\.py$/, ""));
+        if (!testModules.length) {
+          onOut("No test files found (expected test_*.py).", "warn");
+          return { ok: false, passed: 0, failed: 0 };
+        }
+        py.setStdout({ batched: (s) => onOut(s, "out") });
+        py.setStderr({ batched: (s) => onOut(s, "out") });
+        py.globals.set("__mods", testModules.join(","));
+        const result = await py.runPythonAsync(`
+import json, unittest
+_loader = unittest.TestLoader()
+_suite = unittest.TestSuite()
+for _m in __mods.split(","):
+    _suite.addTests(_loader.loadTestsFromName(_m))
+_runner = unittest.TextTestRunner(verbosity=2)
+_res = _runner.run(_suite)
+json.dumps({"ok": _res.wasSuccessful(),
+            "ran": _res.testsRun,
+            "failed": len(_res.failures) + len(_res.errors)})
+`);
+        return JSON.parse(result);
+      }
+      return runJsTests(files, onOut);
+    },
+  };
+
+  /* ---------- JavaScript run sandbox ---------- */
+  function runJs(code, onOut) {
+    return new Promise((resolve) => {
+      const logs = [];
+      const fakeConsole = makeConsole(onOut, logs);
+      try {
+        // eslint-disable-next-line no-new-func
+        const fn = new Function("console", '"use strict";\n' + code);
+        fn(fakeConsole);
+        resolve({ ok: true, output: logs.join("\n") });
+      } catch (e) {
+        onOut(String(e && e.stack ? e.stack : e), "err");
+        resolve({ ok: false, error: String(e) });
+      }
+    });
+  }
+
+  function runJsTests(files, onOut) {
+    return new Promise((resolve) => {
+      const testFile = Object.keys(files).find((f) => /\.test\.js$/.test(f));
+      if (!testFile) {
+        onOut("No test files found (expected *.test.js).", "warn");
+        return resolve({ ok: false, passed: 0, failed: 0 });
+      }
+      const sources = Object.keys(files)
+        .filter((f) => /\.js$/.test(f) && !/\.test\.js$/.test(f))
+        .map((f) => files[f])
+        .join("\n");
+      let passed = 0, failed = 0;
+      const logs = [];
+      const fakeConsole = makeConsole(onOut, logs);
+      const harness = `
+const __tests = [];
+function test(name, fn){ __tests.push({name, fn}); }
+function assert(cond, msg){ if(!cond) throw new Error(msg || "assertion failed"); }
+function assertEqual(a, b){
+  if (JSON.stringify(a) !== JSON.stringify(b))
+    throw new Error("expected " + JSON.stringify(b) + " but got " + JSON.stringify(a));
+}
+${sources}
+${files[testFile]}
+return __tests;
+`;
+      try {
+        // eslint-disable-next-line no-new-func
+        const tests = new Function("console", '"use strict";\n' + harness)(fakeConsole);
+        tests.forEach((t) => {
+          try {
+            t.fn();
+            passed++;
+            onOut("  PASS  " + t.name, "ok");
+          } catch (e) {
+            failed++;
+            onOut("  FAIL  " + t.name + " — " + e.message, "err");
+          }
+        });
+        onOut(`\n${passed} passed, ${failed} failed`, failed ? "err" : "ok");
+        resolve({ ok: failed === 0, ran: passed + failed, failed });
+      } catch (e) {
+        onOut(String(e && e.stack ? e.stack : e), "err");
+        resolve({ ok: false, ran: 0, failed: 1 });
+      }
+    });
+  }
+
+  function makeConsole(onOut, logs) {
+    const fmt = (args) => args.map((a) =>
+      typeof a === "object" ? JSON.stringify(a) : String(a)).join(" ");
+    return {
+      log: (...a) => { const s = fmt(a); logs.push(s); onOut(s, "out"); },
+      info: (...a) => { const s = fmt(a); logs.push(s); onOut(s, "info"); },
+      warn: (...a) => { const s = fmt(a); logs.push(s); onOut(s, "warn"); },
+      error: (...a) => { const s = fmt(a); logs.push(s); onOut(s, "err"); },
+    };
+  }
+
+  window.Runner = Runner;
+})();
+
+</script>
+  <script>
+/* Monaco editor + file tree + tabs management */
+(function () {
+  "use strict";
+
+  let editor = null;
+  let monacoRef = null;
+  let currentModelFile = null;
+  let readOnly = false;
+  let onChangeCb = null;
+
+  function langForFile(name) {
+    if (/\.py$/.test(name)) return "python";
+    if (/\.js$/.test(name)) return "javascript";
+    if (/\.md$/.test(name)) return "markdown";
+    if (/\.json$/.test(name)) return "json";
+    if (/\.ya?ml$/.test(name)) return "yaml";
+    return "plaintext";
+  }
+
+  function iconClass(name) {
+    if (/\.py$/.test(name)) return "py";
+    if (/\.js$/.test(name)) return "js";
+    return "other";
+  }
+
+  const Editor = {
+    init(onChange) {
+      onChangeCb = onChange;
+      return new Promise((resolve) => {
+        require.config({ paths: { vs: window.MONACO_BASE } });
+        require(["vs/editor/editor.main"], () => {
+          monacoRef = window.monaco;
+          editor = monacoRef.editor.create(document.getElementById("editor"), {
+            value: "",
+            language: "python",
+            theme: "vs-dark",
+            automaticLayout: true,
+            fontSize: 13.5,
+            fontFamily: 'JetBrains Mono, "SF Mono", Consolas, monospace',
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            tabSize: 4,
+            renderWhitespace: "selection",
+          });
+          editor.onDidChangeModelContent(() => {
+            if (readOnly || !currentModelFile) return;
+            Store.setFile(currentModelFile, editor.getValue());
+            onChangeCb && onChangeCb(currentModelFile);
+          });
+          resolve();
+        });
+      });
+    },
+
+    openFile(name, content, isReadOnly) {
+      currentModelFile = name;
+      readOnly = !!isReadOnly;
+      const value = content != null ? content : (Store.files[name] || "");
+      editor.setValue(value);
+      monacoRef.editor.setModelLanguage(editor.getModel(), langForFile(name));
+      editor.updateOptions({ readOnly: readOnly });
+      document.getElementById("readonlyBadge").classList.toggle("hidden", !readOnly);
+      document.getElementById("statusFile").textContent = name;
+      this.clearMarkers();
+    },
+
+    getActiveFile() { return currentModelFile; },
+    isReadOnly() { return readOnly; },
+
+    /* draw the project file list */
+    renderTree(files, activeFile, onSelect) {
+      const tree = document.getElementById("fileTree");
+      tree.innerHTML = "";
+      const names = Object.keys(files).sort();
+      if (!names.length) {
+        tree.innerHTML = '<li class="hint">No files</li>';
+        return;
+      }
+      names.forEach((name) => {
+        const li = document.createElement("li");
+        if (name === activeFile) li.classList.add("active");
+        li.innerHTML =
+          '<span class="file-icon ' + iconClass(name) + '">&#9679;</span>' +
+          '<span class="file-name"></span>';
+        li.querySelector(".file-name").textContent = name;
+        li.onclick = () => onSelect(name);
+        tree.appendChild(li);
+      });
+    },
+
+    renderTabs(activeFile, onSelect) {
+      const tabs = document.getElementById("tabs");
+      tabs.innerHTML = "";
+      if (!activeFile) return;
+      const div = document.createElement("div");
+      div.className = "tab active";
+      div.innerHTML = '<span class="tab-name"></span>';
+      div.querySelector(".tab-name").textContent = activeFile;
+      div.onclick = () => onSelect(activeFile);
+      tabs.appendChild(div);
+    },
+
+    /* problems / error markers */
+    setMarker(line, message) {
+      if (!editor || !line) return;
+      const model = editor.getModel();
+      monacoRef.editor.setModelMarkers(model, "classlab", [{
+        startLineNumber: line, startColumn: 1,
+        endLineNumber: line, endColumn: 1000,
+        message: message,
+        severity: monacoRef.MarkerSeverity.Error,
+      }]);
+      editor.revealLineInCenter(line);
+    },
+    clearMarkers() {
+      if (editor) monacoRef.editor.setModelMarkers(editor.getModel(), "classlab", []);
+    },
+  };
+
+  window.Editor = Editor;
+})();
+
+</script>
+  <script>
+/* ClassLab IDE — application wiring (GitHub edition) */
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  let repoCache = null;           // resolved GitHub repo object
+  let viewingClassmate = false;   // true while a read-only classmate file is open
+
+  /* ============ console helpers ============ */
+  const Console = {
+    out(text, cls) {
+      const el = $("consoleOutput");
+      const span = document.createElement("span");
+      if (cls) span.className = cls;
+      span.textContent = text + "\n";
+      el.appendChild(span);
+      el.scrollTop = el.scrollHeight;
+    },
+    git(text, cls) {
+      const el = $("consoleGit");
+      const span = document.createElement("span");
+      if (cls) span.className = cls;
+      span.textContent = "[" + new Date().toLocaleTimeString() + "] " + text + "\n";
+      el.appendChild(span);
+      el.scrollTop = el.scrollHeight;
+      switchConsole("git");
+    },
+    problems(text, cls) {
+      const el = $("consoleProblems");
+      el.textContent = "";
+      const span = document.createElement("span");
+      if (cls) span.className = cls;
+      span.textContent = text;
+      el.appendChild(span);
+    },
+    clear() {
+      $("consoleOutput").textContent = "";
+      $("consoleProblems").textContent = "";
+    },
+    header(text) { this.out("──── " + text + " ────", "dim"); },
+  };
+
+  function switchConsole(tab) {
+    document.querySelectorAll(".console-tab").forEach((t) =>
+      t.classList.toggle("active", t.dataset.tab === tab));
+    $("consoleOutput").classList.toggle("hidden", tab !== "output");
+    $("consoleProblems").classList.toggle("hidden", tab !== "problems");
+    $("consoleGit").classList.toggle("hidden", tab !== "git");
+  }
+
+  function setLoading(on, text) {
+    $("loadingText").textContent = text || "Working…";
+    $("loadingOverlay").classList.toggle("hidden", !on);
+  }
+
+  function setConn(state, label) {
+    const el = $("connStatus");
+    el.className = "conn-status " + (state === "on" ? "conn-on" : state === "err" ? "conn-err" : "conn-off");
+    el.innerHTML = "&#9679; " + label;
+  }
+
+  /* ============ project / files view ============ */
+  function refreshViews() {
+    Editor.renderTree(Store.files, Store.activeFile, selectFile);
+    Editor.renderTabs(Store.activeFile, selectFile);
+    $("statusProject").textContent = Store.config.repo || "No repo";
+    $("statusLang").textContent = Store.language;
+  }
+
+  function selectFile(name) {
+    viewingClassmate = false;
+    Store.activeFile = name;
+    Store.saveFiles();
+    Editor.openFile(name, Store.files[name], false);
+    refreshViews();
+  }
+
+  function entryFile() {
+    const main = Store.language === "python" ? "main.py" : "main.js";
+    if (Store.files[main]) return main;
+    const af = Editor.getActiveFile();
+    if (af && !/\.(md|json|ya?ml)$/.test(af)) return af;
+    return Object.keys(Store.files).find((f) =>
+      Store.language === "python" ? /\.py$/.test(f) : /\.js$/.test(f));
+  }
+
+  /* ============ actions: validate / run / test ============ */
+  async function doValidate() {
+    if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
+    const entry = entryFile();
+    if (!entry) return;
+    Editor.clearMarkers();
+    Console.header("Validate " + entry);
+    try {
+      const r = await Runner.validate(Store.files, entry, Store.language);
+      if (r.ok) {
+        Console.out("✓ No syntax errors. Code looks valid.", "ok");
+        Console.problems("No problems detected. ✓", "ok");
+      } else {
+        const msg = "✗ " + (r.msg || "Syntax error") + (r.line ? " (line " + r.line + ")" : "");
+        Console.out(msg, "err");
+        Console.problems(entry + "\n  " + msg, "err");
+        Editor.setMarker(r.line, r.msg || "Syntax error");
+        switchConsole("problems");
+      }
+      return r.ok;
+    } catch (e) {
+      Console.out(String(e.message || e), "err");
+      return false;
+    }
+  }
+
+  async function doRun() {
+    if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
+    const entry = entryFile();
+    if (!entry) return Console.out("No runnable file found.", "warn");
+    switchConsole("output");
+    Console.header("Run " + entry);
+    setLoading(true, "Running " + entry + "…");
+    try {
+      const r = await Runner.run(Store.files, entry, Store.language, (s, c) => Console.out(s, c));
+      Console.out(r.ok ? "\n[process finished — exit 0]" : "\n[process finished — error]",
+        r.ok ? "dim" : "err");
+    } catch (e) {
+      Console.out(String(e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function doTest() {
+    if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
+    switchConsole("output");
+    Console.header("Test");
+    setLoading(true, "Running tests…");
+    try {
+      const r = await Runner.test(Store.files, Store.language, (s, c) => Console.out(s, c));
+      if (r.ran != null) {
+        Console.out(
+          `\nResult: ${r.failed ? "FAILED" : "PASSED"} — ${r.ran} test(s), ${r.failed || 0} failed`,
+          r.failed ? "err" : "ok");
+      }
+    } catch (e) {
+      Console.out(String(e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ============ GitHub: resolve repo ============ */
+  async function resolveRepo() {
+    if (!Store.config.repo) throw new Error("Set your repository (owner/repo) in Settings.");
+    if (repoCache && repoCache.full_name && repoCache.__key === Store.config.repo) return repoCache;
+    const r = await GitHub.getRepo(Store.config.repo);
+    r.__key = Store.config.repo;
+    repoCache = r;
+    return r;
+  }
+
+  /* ============ GitHub: push ============ */
+  async function doPush() {
+    if (!Store.config.token) return openSettings();
+    const msg = await promptInput("Commit message", "Commit message", "Update from ClassLab IDE");
+    if (msg == null) return;
+    setLoading(true, "Pushing to GitHub…");
+    try {
+      const repo = await resolveRepo();
+      const branch = Store.config.branch || repo.default_branch || "main";
+      const commit = await GitHub.commitFiles(repo.full_name, branch, msg, Store.files);
+      Console.git("Pushed " + Object.keys(Store.files).length +
+        " file(s) → " + repo.full_name + " @ " + commit.sha.slice(0, 7), "ok");
+      Console.git("View commit: " + commit.html_url, "info");
+      setConn("on", "Connected");
+    } catch (e) {
+      Console.git("Push failed: " + (e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ============ GitHub: pull (your own repo) ============ */
+  async function doPull() {
+    if (!Store.config.token) return openSettings();
+    if (!confirm("Pull will replace your current files with the latest from GitHub. Continue?")) return;
+    setLoading(true, "Pulling from GitHub…");
+    try {
+      const repo = await resolveRepo();
+      const branch = Store.config.branch || repo.default_branch || "main";
+      const files = await GitHub.pullFiles(repo.full_name, branch);
+      if (!Object.keys(files).length) {
+        Console.git("Repository is empty — nothing to pull.", "warn");
+        return;
+      }
+      const active = files["main.py"] ? "main.py" : files["main.js"] ? "main.js" : Object.keys(files)[0];
+      Store.replaceAll(files, active);
+      Editor.openFile(active, Store.files[active], false);
+      refreshViews();
+      Console.git("Pulled " + Object.keys(files).length + " file(s) from " + repo.full_name, "ok");
+    } catch (e) {
+      Console.git("Pull failed: " + (e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ============ GitHub: deploy (GitHub Pages) ============ */
+  async function doDeploy() {
+    if (!Store.config.token) return openSettings();
+    setLoading(true, "Deploying to GitHub Pages…");
+    try {
+      const repo = await resolveRepo();
+      const branch = Store.config.branch || repo.default_branch || "main";
+      // 1) push current files
+      await GitHub.commitFiles(repo.full_name, branch, "Deploy via ClassLab IDE", Store.files);
+      Console.git("Pushed files for deploy.", "ok");
+      // 2) make sure Pages is enabled (deploy from branch root)
+      let pages = await GitHub.getPages(repo.full_name);
+      if (!pages) {
+        try {
+          pages = await GitHub.enablePages(repo.full_name, branch);
+          Console.git("Enabled GitHub Pages (branch " + branch + ", root).", "ok");
+        } catch (e) {
+          Console.git("Couldn't auto-enable Pages: " + (e.message || e), "warn");
+          Console.git("Fix once: repo Settings → Pages → Source: Deploy from a branch → " +
+            branch + " / (root) → Save.", "info");
+        }
+      }
+      const url = (pages && pages.html_url) ? pages.html_url : GitHub.pagesUrl(repo.full_name);
+      Console.git("Build runs on GitHub (~1 min). Then your site is at:", "ok");
+      Console.git(url, "info");
+      Console.git("Track build: " + GitHub.actionsUrl(repo), "info");
+    } catch (e) {
+      Console.git("Deploy failed: " + (e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ============ GitHub: browse classmates ============ */
+  async function doBrowse() {
+    if (!Store.config.token) return openSettings();
+    if (!Store.config.org) {
+      Console.git("Set a Classmates Org/Username in Settings to browse other projects.", "warn");
+      return openSettings();
+    }
+    setLoading(true, "Loading classmates' projects…");
+    try {
+      let projects;
+      try {
+        projects = await GitHub.listOrgRepos(Store.config.org);
+      } catch (e) {
+        // not an org? fall back to a user's public repos
+        projects = await GitHub.listUserRepos(Store.config.org);
+      }
+      const tree = $("classmatesTree");
+      tree.innerHTML = "";
+      if (!projects.length) { tree.innerHTML = '<li class="hint">No repositories found.</li>'; return; }
+      projects.forEach((p) => {
+        const li = document.createElement("li");
+        li.innerHTML = '<span class="file-icon other">&#128193;</span><span class="file-name"></span>';
+        li.querySelector(".file-name").textContent = p.name;
+        li.title = p.full_name;
+        li.onclick = () => loadClassmateProject(p);
+        tree.appendChild(li);
+      });
+      Console.git("Loaded " + projects.length + " classmate repo(s).", "ok");
+    } catch (e) {
+      Console.git("Browse failed: " + (e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadClassmateProject(p) {
+    setLoading(true, "Opening " + p.name + "…");
+    try {
+      const branch = p.default_branch || "main";
+      const paths = await GitHub.listTree(p.full_name, branch);
+      const tree = $("classmatesTree");
+      const sub = document.createElement("ul");
+      sub.className = "file-tree";
+      paths.forEach((path) => {
+        const li = document.createElement("li");
+        li.style.paddingLeft = "22px";
+        li.innerHTML = '<span class="file-icon other">&#9679;</span><span class="file-name"></span>';
+        li.querySelector(".file-name").textContent = path;
+        li.onclick = async (ev) => {
+          ev.stopPropagation();
+          setLoading(true, "Opening " + path + "…");
+          try {
+            const content = await GitHub.getFileRaw(p.full_name, path, branch);
+            viewingClassmate = true;
+            Editor.openFile(p.name + "/" + path, content, true);
+          } catch (e) { Console.git(String(e.message || e), "err"); }
+          finally { setLoading(false); }
+        };
+        sub.appendChild(li);
+      });
+      tree.appendChild(sub);
+      Console.git("Opened " + p.full_name + " (" + paths.length + " files, read-only).", "ok");
+    } catch (e) {
+      Console.git("Open failed: " + (e.message || e), "err");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ============ settings modal ============ */
+  function openSettings() {
+    $("cfgToken").value = Store.config.token;
+    $("cfgRepo").value = Store.config.repo;
+    $("cfgBranch").value = Store.config.branch;
+    $("cfgOrg").value = Store.config.org;
+    $("settingsResult").textContent = "";
+    $("settingsModal").classList.remove("hidden");
+  }
+  function closeSettings() { $("settingsModal").classList.add("hidden"); }
+
+  function readSettingsForm() {
+    return {
+      token: $("cfgToken").value.trim(),
+      repo: $("cfgRepo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, ""),
+      branch: $("cfgBranch").value.trim() || "main",
+      org: $("cfgOrg").value.trim(),
+    };
+  }
+
+  async function testConnection() {
+    Store.saveConfig(readSettingsForm());
+    repoCache = null;
+    const res = $("settingsResult");
+    res.className = "settings-result";
+    res.textContent = "Testing…";
+    try {
+      const user = await GitHub.currentUser();
+      let extra = "";
+      if (Store.config.repo) {
+        const r = await GitHub.getRepo(Store.config.repo);
+        extra = " · repo: " + r.full_name;
+      }
+      res.className = "settings-result ok";
+      res.textContent = "✓ Connected as @" + user.login + extra;
+      setConn("on", "Connected");
+    } catch (e) {
+      res.className = "settings-result err";
+      res.textContent = "✗ " + (e.message || e);
+      setConn("err", "Error");
+    }
+  }
+
+  function saveSettings() {
+    Store.saveConfig(readSettingsForm());
+    repoCache = null;
+    refreshViews();
+    closeSettings();
+    if (Store.config.token) setConn("on", "Connected");
+  }
+
+  /* ============ prompt modal ============ */
+  let promptResolve = null;
+  function promptInput(title, label, def) {
+    $("promptTitle").textContent = title;
+    $("promptLabel").textContent = label;
+    $("promptInput").value = def || "";
+    $("promptModal").classList.remove("hidden");
+    $("promptInput").focus();
+    return new Promise((resolve) => { promptResolve = resolve; });
+  }
+  function closePrompt(val) {
+    $("promptModal").classList.add("hidden");
+    if (promptResolve) { promptResolve(val); promptResolve = null; }
+  }
+
+  /* ============ file ops ============ */
+  async function newFile() {
+    const name = await promptInput("New File", "File name (e.g. utils.py)", "");
+    if (!name) return;
+    if (Store.files[name]) return alert("File already exists.");
+    Store.setFile(name, "");
+    selectFile(name);
+  }
+  function deleteFile() {
+    const af = Editor.getActiveFile();
+    if (!af || viewingClassmate) return;
+    if (!confirm("Delete " + af + "?")) return;
+    Store.deleteFile(af);
+    refreshViews();
+    if (Store.activeFile) selectFile(Store.activeFile);
+    else Editor.openFile("untitled", "", false);
+  }
+
+  /* ============ language switch ============ */
+  function switchLanguage(lang) {
+    if (lang === Store.language) return;
+    if (!confirm("Switch to " + lang + "? This loads a fresh " + lang + " starter project.")) {
+      $("languageSelect").value = Store.language;
+      return;
+    }
+    Store.resetSample(lang);
+    selectFile(Store.activeFile);
+    Runner.preload((s) => $("statusRuntime").textContent = "Runtime: " + s);
+  }
+
+  /* ============ bootstrap ============ */
+  async function boot() {
+    Store.loadConfig();
+    Store.loadFiles();
+    if (Store.config.token) setConn("on", "Connected");
+
+    $("languageSelect").value = Store.language;
+    await Editor.init(() => { /* autosaved in Store */ });
+
+    if (Store.activeFile) Editor.openFile(Store.activeFile, Store.files[Store.activeFile], false);
+    refreshViews();
+
+    Runner.preload((s) => { $("statusRuntime").textContent = "Runtime: " + s; })
+      .catch((e) => $("statusRuntime").textContent = "Runtime error: " + e.message);
+
+    bindEvents();
+  }
+
+  function bindEvents() {
+    $("btnValidate").onclick = doValidate;
+    $("btnRun").onclick = doRun;
+    $("btnTest").onclick = doTest;
+    $("btnPush").onclick = doPush;
+    $("btnPull").onclick = doPull;
+    $("btnDeploy").onclick = doDeploy;
+    $("btnBrowse").onclick = doBrowse;
+
+    $("btnSettings").onclick = openSettings;
+    $("btnCloseSettings").onclick = closeSettings;
+    $("btnTestConn").onclick = testConnection;
+    $("btnSaveSettings").onclick = saveSettings;
+
+    $("btnNewFile").onclick = newFile;
+    $("btnDeleteFile").onclick = deleteFile;
+    $("btnClearConsole").onclick = () => Console.clear();
+
+    $("btnConfirmPrompt").onclick = () => closePrompt($("promptInput").value);
+    $("btnCancelPrompt").onclick = () => closePrompt(null);
+    $("btnClosePrompt").onclick = () => closePrompt(null);
+    $("promptInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") closePrompt($("promptInput").value);
+      if (e.key === "Escape") closePrompt(null);
+    });
+
+    $("languageSelect").onchange = (e) => switchLanguage(e.target.value);
+
+    document.querySelectorAll(".console-tab").forEach((t) =>
+      t.onclick = () => switchConsole(t.dataset.tab));
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); doRun(); }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+        e.preventDefault(); doPush();
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", boot);
+})();
+
+</script>
+</body>
+</html>
