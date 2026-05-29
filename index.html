@@ -719,6 +719,7 @@ button { font-family: inherit; }
   async function api(path, opts = {}) {
     const token = Store.config.token;
     if (!token) throw new Error("No GitHub token set. Open Settings (gear icon).");
+    const method = opts.method || "GET";
     const headers = Object.assign(
       {
         "Authorization": "Bearer " + token,
@@ -728,9 +729,14 @@ button { font-family: inherit; }
       opts.body ? { "Content-Type": "application/json" } : {},
       opts.headers || {}
     );
+    // Bypass all caches so Pull always sees the newest commit/tree/file.
+    let url = API + path;
+    if (method === "GET") {
+      url += (path.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
+    }
     let res;
     try {
-      res = await fetch(API + path, { method: opts.method || "GET", headers, body: opts.body });
+      res = await fetch(url, { method, headers, body: opts.body, cache: "no-store" });
     } catch (e) {
       throw new Error(
         "Network/CORS error reaching GitHub. If you opened the file directly, " +
