@@ -391,17 +391,19 @@ button { font-family: inherit; }
         &#9881; Test
       </button>
       <span class="divider"></span>
-      <button id="btnPull" class="btn" title="Pull the latest files from GitHub">
-        &#8595; Pull
-      </button>
-      <button id="btnPush" class="btn btn-push" title="Commit &amp; push your files to GitHub">
-        &#8593; Push
-      </button>
-      <button id="btnDeploy" class="btn btn-deploy" title="Deploy to GitHub Pages">
+      <label class="lang-select" title="Choose the target environment">
+        Env
+        <select id="envSelect">
+          <option value="Dev">Dev</option>
+          <option value="UAT">UAT</option>
+          <option value="Production">Production</option>
+        </select>
+      </label>
+      <button id="btnDeploy" class="btn btn-deploy" title="Deploy / promote the current file to the selected environment">
         &#9729; Deploy
       </button>
-      <button id="btnBrowse" class="btn" title="Browse classmates' projects">
-        &#128101; Classmates
+      <button id="btnPull" class="btn btn-push" title="Clone/refresh the shared class repository">
+        &#8595; Pull Repo
       </button>
     </div>
 
@@ -420,7 +422,7 @@ button { font-family: inherit; }
     <!-- Sidebar: file explorer -->
     <aside class="sidebar" id="sidebar">
       <div class="panel-head">
-        <span>Project</span>
+        <span>My Files</span>
         <div class="panel-actions">
           <button id="btnNewFile" class="icon-btn" title="New file">+</button>
           <button id="btnDeleteFile" class="icon-btn" title="Delete current file">&#128465;</button>
@@ -429,10 +431,13 @@ button { font-family: inherit; }
       <ul class="file-tree" id="fileTree"></ul>
 
       <div class="panel-head sidebar-section">
-        <span>Classmates</span>
+        <span>Repository &middot; Dev / UAT / Prod</span>
+        <div class="panel-actions">
+          <button id="btnRefreshRepo" class="icon-btn" title="Refresh from GitHub">&#8635;</button>
+        </div>
       </div>
       <ul class="file-tree" id="classmatesTree">
-        <li class="hint">Click "Classmates" to browse.</li>
+        <li class="hint">Click "Pull Repo" to clone.</li>
       </ul>
     </aside>
 
@@ -484,16 +489,16 @@ button { font-family: inherit; }
           <input type="password" id="cfgToken" placeholder="ghp_xxxxxxxxxxxxxxxx" />
         </label>
         <label class="field">
-          <span>Your Repository <small>(owner/repo)</small></span>
-          <input type="text" id="cfgRepo" placeholder="Pinnxxx/my-classlab-project" />
+          <span>Shared Class Repository <small>(owner/repo)</small></span>
+          <input type="text" id="cfgRepo" placeholder="Pinnxxx/classlab-ide" />
         </label>
         <label class="field">
           <span>Branch</span>
           <input type="text" id="cfgBranch" value="main" />
         </label>
         <label class="field">
-          <span>Classmates Org or Username <small>(optional)</small></span>
-          <input type="text" id="cfgOrg" placeholder="my-class-org" />
+          <span>Your name / lab file prefix <small>(e.g. pinca)</small></span>
+          <input type="text" id="cfgStudent" placeholder="pinca" />
         </label>
         <p class="modal-note">
           Your token is stored only in <strong>this browser</strong> (localStorage) and is sent
@@ -550,10 +555,12 @@ button { font-family: inherit; }
 
   const DEFAULT_CONFIG = {
     token: "",
-    repo: "",     // "owner/repo"
+    repo: "",       // shared class repo "owner/repo"
     branch: "main",
-    org: "",      // classmates: GitHub organization (or a username for fallback)
+    student: "",    // student name / lab file prefix (e.g. "pinca")
   };
+
+  const ENVIRONMENTS = ["Dev", "UAT", "Production"];
 
   // Starter files so students always have something to run.
   const SAMPLE_PYTHON = {
@@ -687,6 +694,7 @@ button { font-family: inherit; }
     },
   };
 
+  Store.ENVIRONMENTS = ENVIRONMENTS;
   window.Store = Store;
 })();
 
@@ -1198,31 +1206,26 @@ return __tests;
 
 </script>
   <script>
-/* ClassLab IDE — application wiring (GitHub edition) */
+/* ClassLab IDE — application wiring (GitHub shared-repo + Dev/UAT/Prod pipeline) */
 (function () {
   "use strict";
 
   const $ = (id) => document.getElementById(id);
   let repoCache = null;           // resolved GitHub repo object
-  let viewingClassmate = false;   // true while a read-only classmate file is open
+  let viewingClassmate = false;   // true while a read-only repo file is open
+
+  function iconClass(name) {
+    if (/\.py$/.test(name)) return "py";
+    if (/\.js$/.test(name)) return "js";
+    return "other";
+  }
+  function basename(p) { return (p || "").split("/").pop(); }
 
   /* ============ console helpers ============ */
   const Console = {
-    out(text, cls) {
-      const el = $("consoleOutput");
-      const span = document.createElement("span");
-      if (cls) span.className = cls;
-      span.textContent = text + "\n";
-      el.appendChild(span);
-      el.scrollTop = el.scrollHeight;
-    },
+    out(text, cls) { this._write("consoleOutput", text + "\n", cls); },
     git(text, cls) {
-      const el = $("consoleGit");
-      const span = document.createElement("span");
-      if (cls) span.className = cls;
-      span.textContent = "[" + new Date().toLocaleTimeString() + "] " + text + "\n";
-      el.appendChild(span);
-      el.scrollTop = el.scrollHeight;
+      this._write("consoleGit", "[" + new Date().toLocaleTimeString() + "] " + text + "\n", cls);
       switchConsole("git");
     },
     problems(text, cls) {
@@ -1233,10 +1236,15 @@ return __tests;
       span.textContent = text;
       el.appendChild(span);
     },
-    clear() {
-      $("consoleOutput").textContent = "";
-      $("consoleProblems").textContent = "";
+    _write(id, text, cls) {
+      const el = $(id);
+      const span = document.createElement("span");
+      if (cls) span.className = cls;
+      span.textContent = text;
+      el.appendChild(span);
+      el.scrollTop = el.scrollHeight;
     },
+    clear() { $("consoleOutput").textContent = ""; $("consoleProblems").textContent = ""; },
     header(text) { this.out("──── " + text + " ────", "dim"); },
   };
 
@@ -1252,21 +1260,19 @@ return __tests;
     $("loadingText").textContent = text || "Working…";
     $("loadingOverlay").classList.toggle("hidden", !on);
   }
-
   function setConn(state, label) {
     const el = $("connStatus");
     el.className = "conn-status " + (state === "on" ? "conn-on" : state === "err" ? "conn-err" : "conn-off");
     el.innerHTML = "&#9679; " + label;
   }
 
-  /* ============ project / files view ============ */
+  /* ============ local files view ============ */
   function refreshViews() {
     Editor.renderTree(Store.files, Store.activeFile, selectFile);
     Editor.renderTabs(Store.activeFile, selectFile);
     $("statusProject").textContent = Store.config.repo || "No repo";
     $("statusLang").textContent = Store.language;
   }
-
   function selectFile(name) {
     viewingClassmate = false;
     Store.activeFile = name;
@@ -1276,19 +1282,20 @@ return __tests;
   }
 
   function entryFile() {
-    const main = Store.language === "python" ? "main.py" : "main.js";
-    if (Store.files[main]) return main;
+    const isPy = Store.language === "python";
+    const runnable = (n) => (isPy ? /\.py$/.test(n) : /\.js$/.test(n));
     const af = Editor.getActiveFile();
-    if (af && !/\.(md|json|ya?ml)$/.test(af)) return af;
-    return Object.keys(Store.files).find((f) =>
-      Store.language === "python" ? /\.py$/.test(f) : /\.js$/.test(f));
+    if (af && !viewingClassmate && runnable(af) && (af in Store.files)) return af;
+    const main = isPy ? "main.py" : "main.js";
+    if (Store.files[main]) return main;
+    return Object.keys(Store.files).find(runnable);
   }
 
-  /* ============ actions: validate / run / test ============ */
+  /* ============ validate / run / test (local) ============ */
   async function doValidate() {
     if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
     const entry = entryFile();
-    if (!entry) return;
+    if (!entry) return Console.out("No runnable file found.", "warn");
     Editor.clearMarkers();
     Console.header("Validate " + entry);
     try {
@@ -1304,10 +1311,7 @@ return __tests;
         switchConsole("problems");
       }
       return r.ok;
-    } catch (e) {
-      Console.out(String(e.message || e), "err");
-      return false;
-    }
+    } catch (e) { Console.out(String(e.message || e), "err"); return false; }
   }
 
   async function doRun() {
@@ -1321,11 +1325,8 @@ return __tests;
       const r = await Runner.run(Store.files, entry, Store.language, (s, c) => Console.out(s, c));
       Console.out(r.ok ? "\n[process finished — exit 0]" : "\n[process finished — error]",
         r.ok ? "dim" : "err");
-    } catch (e) {
-      Console.out(String(e.message || e), "err");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Console.out(String(e.message || e), "err"); }
+    finally { setLoading(false); }
   }
 
   async function doTest() {
@@ -1336,99 +1337,76 @@ return __tests;
     try {
       const r = await Runner.test(Store.files, Store.language, (s, c) => Console.out(s, c));
       if (r.ran != null) {
-        Console.out(
-          `\nResult: ${r.failed ? "FAILED" : "PASSED"} — ${r.ran} test(s), ${r.failed || 0} failed`,
+        Console.out(`\nResult: ${r.failed ? "FAILED" : "PASSED"} — ${r.ran} test(s), ${r.failed || 0} failed`,
           r.failed ? "err" : "ok");
       }
-    } catch (e) {
-      Console.out(String(e.message || e), "err");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Console.out(String(e.message || e), "err"); }
+    finally { setLoading(false); }
   }
 
-  /* ============ GitHub: resolve repo ============ */
+  /* ============ resolve shared repo ============ */
   async function resolveRepo() {
-    if (!Store.config.repo) throw new Error("Set your repository (owner/repo) in Settings.");
-    if (repoCache && repoCache.full_name && repoCache.__key === Store.config.repo) return repoCache;
+    if (!Store.config.repo) throw new Error("Set the Shared Class Repository (owner/repo) in Settings.");
+    if (repoCache && repoCache.__key === Store.config.repo) return repoCache;
     const r = await GitHub.getRepo(Store.config.repo);
     r.__key = Store.config.repo;
     repoCache = r;
     return r;
   }
 
-  /* ============ GitHub: push ============ */
-  async function doPush() {
-    if (!Store.config.token) return openSettings();
-    const msg = await promptInput("Commit message", "Commit message", "Update from ClassLab IDE");
-    if (msg == null) return;
-    setLoading(true, "Pushing to GitHub…");
-    try {
-      const repo = await resolveRepo();
-      const branch = Store.config.branch || repo.default_branch || "main";
-      const commit = await GitHub.commitFiles(repo.full_name, branch, msg, Store.files);
-      Console.git("Pushed " + Object.keys(Store.files).length +
-        " file(s) → " + repo.full_name + " @ " + commit.sha.slice(0, 7), "ok");
-      Console.git("View commit: " + commit.html_url, "info");
-      setConn("on", "Connected");
-    } catch (e) {
-      Console.git("Push failed: " + (e.message || e), "err");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /* ============ GitHub: pull (your own repo) ============ */
-  async function doPull() {
-    if (!Store.config.token) return openSettings();
-    if (!confirm("Pull will replace your current files with the latest from GitHub. Continue?")) return;
-    setLoading(true, "Pulling from GitHub…");
-    try {
-      const repo = await resolveRepo();
-      const branch = Store.config.branch || repo.default_branch || "main";
-      const files = await GitHub.pullFiles(repo.full_name, branch);
-      if (!Object.keys(files).length) {
-        Console.git("Repository is empty — nothing to pull.", "warn");
-        return;
-      }
-      const active = files["main.py"] ? "main.py" : files["main.js"] ? "main.js" : Object.keys(files)[0];
-      Store.replaceAll(files, active);
-      Editor.openFile(active, Store.files[active], false);
-      refreshViews();
-      Console.git("Pulled " + Object.keys(files).length + " file(s) from " + repo.full_name, "ok");
-    } catch (e) {
-      Console.git("Pull failed: " + (e.message || e), "err");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  /* ============ GitHub: deploy (GitHub Pages) ============ */
+  /* ============ DEPLOY / PROMOTE through environments ============ */
+  // Dev    : commit the local working file   -> Dev/<file>
+  // UAT    : promote the exact Dev artifact  -> UAT/<file>     (requires Dev/<file>)
+  // Prod   : promote the exact UAT artifact  -> Production/<file> (requires UAT/<file>)
   async function doDeploy() {
     if (!Store.config.token) return openSettings();
-    setLoading(true, "Deploying to GitHub Pages…");
+    const env = $("envSelect").value;
+    const af = Editor.getActiveFile();
+    if (!af) return Console.git("Open or create a file first.", "warn");
+    const file = basename(af);
+
+    setLoading(true, "Deploying " + file + " to " + env + "…");
     try {
       const repo = await resolveRepo();
       const branch = Store.config.branch || repo.default_branch || "main";
-      // 1) push current files
-      await GitHub.commitFiles(repo.full_name, branch, "Deploy via ClassLab IDE", Store.files);
-      Console.git("Pushed files for deploy.", "ok");
-      // 2) make sure Pages is enabled (deploy from branch root)
-      let pages = await GitHub.getPages(repo.full_name);
-      if (!pages) {
-        try {
-          pages = await GitHub.enablePages(repo.full_name, branch);
-          Console.git("Enabled GitHub Pages (branch " + branch + ", root).", "ok");
-        } catch (e) {
-          Console.git("Couldn't auto-enable Pages: " + (e.message || e), "warn");
-          Console.git("Fix once: repo Settings → Pages → Source: Deploy from a branch → " +
-            branch + " / (root) → Save.", "info");
+
+      if (env === "Dev") {
+        if (viewingClassmate || !(file in Store.files)) {
+          Console.git('Open YOUR working file in "My Files" before deploying to Dev.', "warn");
+          return;
         }
+        const v = await Runner.validate(Store.files, file, Store.language);
+        if (!v.ok) {
+          switchConsole("problems");
+          Console.git("Deploy blocked: fix syntax errors first (Validate).", "err");
+          return;
+        }
+        const path = "Dev/" + file;
+        const commit = await GitHub.commitFiles(repo.full_name, branch,
+          "Deploy " + file + " to Dev", { [path]: Store.files[file] });
+        Console.git("Deployed → " + path + "  @ " + commit.sha.slice(0, 7), "ok");
+        Console.git("Next: select UAT and Deploy to promote.", "info");
+        Console.git(commit.html_url, "info");
+      } else {
+        const src = env === "UAT" ? "Dev" : "UAT";
+        const srcPath = src + "/" + file;
+        const dstPath = env + "/" + file;
+        let content;
+        try {
+          content = await GitHub.getFileRaw(repo.full_name, srcPath, branch);
+        } catch (e) {
+          Console.git("Cannot promote: " + srcPath + " not found. Deploy to " + src + " first.", "err");
+          return;
+        }
+        const commit = await GitHub.commitFiles(repo.full_name, branch,
+          "Promote " + file + " from " + src + " to " + env, { [dstPath]: content });
+        Console.git("Promoted " + srcPath + " → " + dstPath + "  @ " + commit.sha.slice(0, 7), "ok");
+        if (env === "UAT") Console.git("Next: select Production and Deploy to go live.", "info");
+        else Console.git("🎉 Live in Production.", "ok");
+        Console.git(commit.html_url, "info");
       }
-      const url = (pages && pages.html_url) ? pages.html_url : GitHub.pagesUrl(repo.full_name);
-      Console.git("Build runs on GitHub (~1 min). Then your site is at:", "ok");
-      Console.git(url, "info");
-      Console.git("Track build: " + GitHub.actionsUrl(repo), "info");
+      await pullRepo(true); // refresh the repository view
+      setConn("on", "Connected");
     } catch (e) {
       Console.git("Deploy failed: " + (e.message || e), "err");
     } finally {
@@ -1436,70 +1414,67 @@ return __tests;
     }
   }
 
-  /* ============ GitHub: browse classmates ============ */
-  async function doBrowse() {
+  /* ============ PULL = clone the shared repo into the Repository panel ============ */
+  async function pullRepo(silent) {
     if (!Store.config.token) return openSettings();
-    if (!Store.config.org) {
-      Console.git("Set a Classmates Org/Username in Settings to browse other projects.", "warn");
-      return openSettings();
-    }
-    setLoading(true, "Loading classmates' projects…");
+    if (!silent) setLoading(true, "Cloning shared repository…");
     try {
-      let projects;
-      try {
-        projects = await GitHub.listOrgRepos(Store.config.org);
-      } catch (e) {
-        // not an org? fall back to a user's public repos
-        projects = await GitHub.listUserRepos(Store.config.org);
-      }
-      const tree = $("classmatesTree");
-      tree.innerHTML = "";
-      if (!projects.length) { tree.innerHTML = '<li class="hint">No repositories found.</li>'; return; }
-      projects.forEach((p) => {
-        const li = document.createElement("li");
-        li.innerHTML = '<span class="file-icon other">&#128193;</span><span class="file-name"></span>';
-        li.querySelector(".file-name").textContent = p.name;
-        li.title = p.full_name;
-        li.onclick = () => loadClassmateProject(p);
-        tree.appendChild(li);
-      });
-      Console.git("Loaded " + projects.length + " classmate repo(s).", "ok");
+      const repo = await resolveRepo();
+      const branch = Store.config.branch || repo.default_branch || "main";
+      const paths = await GitHub.listTree(repo.full_name, branch);
+      renderRepoTree(repo, branch, paths);
+      if (!silent) Console.git("Pulled " + repo.full_name + " (" + paths.length + " files).", "ok");
+      return paths;
     } catch (e) {
-      Console.git("Browse failed: " + (e.message || e), "err");
+      if (!silent) Console.git("Pull failed: " + (e.message || e), "err");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
-  async function loadClassmateProject(p) {
-    setLoading(true, "Opening " + p.name + "…");
-    try {
-      const branch = p.default_branch || "main";
-      const paths = await GitHub.listTree(p.full_name, branch);
-      const tree = $("classmatesTree");
-      const sub = document.createElement("ul");
-      sub.className = "file-tree";
-      paths.forEach((path) => {
+  function renderRepoTree(repo, branch, paths) {
+    const tree = $("classmatesTree");
+    tree.innerHTML = "";
+    Store.ENVIRONMENTS.forEach((env) => {
+      const files = paths.filter((p) => p.indexOf(env + "/") === 0).sort();
+      const head = document.createElement("li");
+      head.className = "hint";
+      head.style.fontStyle = "normal";
+      head.style.fontWeight = "700";
+      head.style.color = env === "Production" ? "var(--green)" : env === "UAT" ? "var(--yellow)" : "var(--accent)";
+      head.textContent = env + " (" + files.length + ")";
+      tree.appendChild(head);
+
+      if (!files.length) {
+        const empty = document.createElement("li");
+        empty.className = "hint";
+        empty.style.paddingLeft = "20px";
+        empty.textContent = "— empty —";
+        tree.appendChild(empty);
+        return;
+      }
+      files.forEach((p) => {
+        const fname = basename(p);
         const li = document.createElement("li");
-        li.style.paddingLeft = "22px";
-        li.innerHTML = '<span class="file-icon other">&#9679;</span><span class="file-name"></span>';
-        li.querySelector(".file-name").textContent = path;
-        li.onclick = async (ev) => {
-          ev.stopPropagation();
-          setLoading(true, "Opening " + path + "…");
-          try {
-            const content = await GitHub.getFileRaw(p.full_name, path, branch);
-            viewingClassmate = true;
-            Editor.openFile(p.name + "/" + path, content, true);
-          } catch (e) { Console.git(String(e.message || e), "err"); }
-          finally { setLoading(false); }
-        };
-        sub.appendChild(li);
+        li.style.paddingLeft = "20px";
+        li.innerHTML = '<span class="file-icon ' + iconClass(fname) +
+          '">&#9679;</span><span class="file-name"></span>';
+        li.querySelector(".file-name").textContent = fname;
+        li.title = p;
+        li.onclick = () => openRepoFile(repo, branch, p);
+        tree.appendChild(li);
       });
-      tree.appendChild(sub);
-      Console.git("Opened " + p.full_name + " (" + paths.length + " files, read-only).", "ok");
+    });
+  }
+
+  async function openRepoFile(repo, branch, path) {
+    setLoading(true, "Opening " + path + "…");
+    try {
+      const content = await GitHub.getFileRaw(repo.full_name, path, branch);
+      viewingClassmate = true;
+      Editor.openFile(path, content, true);
     } catch (e) {
-      Console.git("Open failed: " + (e.message || e), "err");
+      Console.git(String(e.message || e), "err");
     } finally {
       setLoading(false);
     }
@@ -1510,7 +1485,7 @@ return __tests;
     $("cfgToken").value = Store.config.token;
     $("cfgRepo").value = Store.config.repo;
     $("cfgBranch").value = Store.config.branch;
-    $("cfgOrg").value = Store.config.org;
+    $("cfgStudent").value = Store.config.student;
     $("settingsResult").textContent = "";
     $("settingsModal").classList.remove("hidden");
   }
@@ -1521,7 +1496,7 @@ return __tests;
       token: $("cfgToken").value.trim(),
       repo: $("cfgRepo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, ""),
       branch: $("cfgBranch").value.trim() || "main",
-      org: $("cfgOrg").value.trim(),
+      student: $("cfgStudent").value.trim().replace(/[^a-zA-Z0-9_-]/g, ""),
     };
   }
 
@@ -1536,7 +1511,8 @@ return __tests;
       let extra = "";
       if (Store.config.repo) {
         const r = await GitHub.getRepo(Store.config.repo);
-        extra = " · repo: " + r.full_name;
+        const canPush = r.permissions && r.permissions.push;
+        extra = " · repo: " + r.full_name + (canPush ? " (write ✓)" : " (READ-ONLY — ask for access)");
       }
       res.className = "settings-result ok";
       res.textContent = "✓ Connected as @" + user.login + extra;
@@ -1564,6 +1540,7 @@ return __tests;
     $("promptInput").value = def || "";
     $("promptModal").classList.remove("hidden");
     $("promptInput").focus();
+    $("promptInput").select();
     return new Promise((resolve) => { promptResolve = resolve; });
   }
   function closePrompt(val) {
@@ -1573,7 +1550,9 @@ return __tests;
 
   /* ============ file ops ============ */
   async function newFile() {
-    const name = await promptInput("New File", "File name (e.g. utils.py)", "");
+    const ext = Store.language === "python" ? ".py" : ".js";
+    const suggested = (Store.config.student ? Store.config.student + "lab" : "mylab") + ext;
+    const name = await promptInput("New File", "File name", suggested);
     if (!name) return;
     if (Store.files[name]) return alert("File already exists.");
     Store.setFile(name, "");
@@ -1623,10 +1602,9 @@ return __tests;
     $("btnValidate").onclick = doValidate;
     $("btnRun").onclick = doRun;
     $("btnTest").onclick = doTest;
-    $("btnPush").onclick = doPush;
-    $("btnPull").onclick = doPull;
     $("btnDeploy").onclick = doDeploy;
-    $("btnBrowse").onclick = doBrowse;
+    $("btnPull").onclick = () => pullRepo(false);
+    $("btnRefreshRepo").onclick = () => pullRepo(false);
 
     $("btnSettings").onclick = openSettings;
     $("btnCloseSettings").onclick = closeSettings;
@@ -1646,14 +1624,13 @@ return __tests;
     });
 
     $("languageSelect").onchange = (e) => switchLanguage(e.target.value);
-
     document.querySelectorAll(".console-tab").forEach((t) =>
       t.onclick = () => switchConsole(t.dataset.tab));
 
     document.addEventListener("keydown", (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); doRun(); }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
-        e.preventDefault(); doPush();
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d") {
+        e.preventDefault(); doDeploy();
       }
     });
   }
