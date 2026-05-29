@@ -883,6 +883,17 @@ button { font-family: inherit; }
 
   let pyodide = null;
   let pyodideLoading = null;
+  let pyflakesReady = false;
+
+  /* Install pyflakes (a pure-Python linter) once, so Validate can catch
+     undefined names / unused imports, not just raw syntax errors. */
+  async function ensurePyflakes(py) {
+    if (pyflakesReady) return true;
+    await py.loadPackage("micropip");
+    await py.runPythonAsync("import micropip\nawait micropip.install('pyflakes')");
+    pyflakesReady = true;
+    return true;
+  }
 
   function loadPyodideOnce(onStatus) {
     if (pyodide) return Promise.resolve(pyodide);
@@ -925,7 +936,7 @@ button { font-family: inherit; }
       return Promise.resolve();
     },
 
-    /* ---------- VALIDATE (syntax only) ---------- */
+    /* ---------- VALIDATE (syntax + undefined names via pyflakes) ---------- */
     async validate(files, entry, language) {
       if (language === "python") {
         const py = await loadPyodideOnce();
@@ -933,25 +944,61 @@ button { font-family: inherit; }
         const src = files[entry] || "";
         py.globals.set("__src", src);
         py.globals.set("__name", entry);
-        const result = py.runPython(`
+
+        let linterOk = false;
+        try { linterOk = await ensurePyflakes(py); } catch (e) { linterOk = false; }
+
+        let result;
+        if (linterOk) {
+          // pyflakes catches syntax errors AND undefined names, unused imports, etc.
+          result = await py.runPythonAsync(`
 import json
+import pyflakes.api as _api
+
+_problems = []
+
+class _Rep:
+    def flake(self, m):
+        try:
+            _text = m.message % m.message_args
+        except Exception:
+            _text = str(m)
+        _problems.append({"line": getattr(m, "lineno", None),
+                          "col": getattr(m, "col", 0) + 1,
+                          "msg": _text, "type": "warning"})
+    def syntaxError(self, filename, msg, lineno, offset, text):
+        _problems.append({"line": lineno, "col": offset or 1,
+                          "msg": msg, "type": "error"})
+    def unexpectedError(self, filename, msg):
+        _problems.append({"line": None, "col": 1, "msg": msg, "type": "error"})
+
+_api.check(__src, __name, _Rep())
+json.dumps(_problems)
+`);
+        } else {
+          // offline fallback: syntax-only via compile()
+          result = py.runPython(`
+import json
+_problems = []
 try:
     compile(__src, __name, "exec")
-    _r = {"ok": True}
 except SyntaxError as e:
-    _r = {"ok": False, "line": e.lineno, "col": e.offset, "msg": e.msg}
-json.dumps(_r)
+    _problems.append({"line": e.lineno, "col": e.offset or 1, "msg": e.msg, "type": "error"})
+json.dumps(_problems)
 `);
-        return JSON.parse(result);
+        }
+        const problems = JSON.parse(result);
+        return { ok: problems.length === 0, problems: problems };
       }
-      // JavaScript: use Function to parse without executing.
+
+      // JavaScript: parse without executing (syntax errors only).
       try {
         // eslint-disable-next-line no-new-func
         new Function(files[entry] || "");
-        return { ok: true };
+        return { ok: true, problems: [] };
       } catch (e) {
         const m = /(\d+):(\d+)/.exec(e.stack || "");
-        return { ok: false, msg: e.message, line: m ? +m[1] : null };
+        return { ok: false, problems: [{ line: m ? +m[1] : null, msg: e.message, type: "error" }] };
       }
     },
 
@@ -1192,15 +1239,21 @@ return __tests;
 
     /* problems / error markers */
     setMarker(line, message) {
-      if (!editor || !line) return;
+      this.setMarkers([{ line: line, msg: message, type: "error" }]);
+    },
+    setMarkers(problems) {
+      if (!editor) return;
       const model = editor.getModel();
-      monacoRef.editor.setModelMarkers(model, "classlab", [{
-        startLineNumber: line, startColumn: 1,
-        endLineNumber: line, endColumn: 1000,
-        message: message,
-        severity: monacoRef.MarkerSeverity.Error,
-      }]);
-      editor.revealLineInCenter(line);
+      const markers = (problems || []).filter((p) => p.line).map((p) => ({
+        startLineNumber: p.line, startColumn: p.col || 1,
+        endLineNumber: p.line, endColumn: 1000,
+        message: p.msg,
+        severity: p.type === "warning"
+          ? monacoRef.MarkerSeverity.Warning
+          : monacoRef.MarkerSeverity.Error,
+      }));
+      monacoRef.editor.setModelMarkers(model, "classlab", markers);
+      if (markers.length) editor.revealLineInCenter(markers[0].startLineNumber);
     },
     clearMarkers() {
       if (editor) monacoRef.editor.setModelMarkers(editor.getModel(), "classlab", []);
@@ -1304,20 +1357,29 @@ return __tests;
     if (!entry) return Console.out("No runnable file found.", "warn");
     Editor.clearMarkers();
     Console.header("Validate " + entry);
+    setLoading(true, "Validating " + entry + "…");
     try {
       const r = await Runner.validate(Store.files, entry, Store.language);
       if (r.ok) {
-        Console.out("✓ No syntax errors. Code looks valid.", "ok");
+        Console.out("✓ No problems found. Code looks valid.", "ok");
         Console.problems("No problems detected. ✓", "ok");
       } else {
-        const msg = "✗ " + (r.msg || "Syntax error") + (r.line ? " (line " + r.line + ")" : "");
-        Console.out(msg, "err");
-        Console.problems(entry + "\n  " + msg, "err");
-        Editor.setMarker(r.line, r.msg || "Syntax error");
+        const lines = r.problems.map((p) =>
+          "  " + (p.type === "warning" ? "⚠" : "✗") +
+          (p.line ? " line " + p.line + (p.col ? ":" + p.col : "") + " — " : " ") + p.msg);
+        Console.out("Found " + r.problems.length + " problem(s):", "err");
+        r.problems.forEach((p, i) => Console.out(lines[i], p.type === "warning" ? "warn" : "err"));
+        Console.problems(entry + "\n" + lines.join("\n"), "err");
+        Editor.setMarkers(r.problems);
         switchConsole("problems");
       }
       return r.ok;
-    } catch (e) { Console.out(String(e.message || e), "err"); return false; }
+    } catch (e) {
+      Console.out(String(e.message || e), "err");
+      return false;
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function doRun() {
