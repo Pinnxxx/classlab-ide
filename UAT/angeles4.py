@@ -1,8 +1,4 @@
-def largest(a, b, c):
-    return max(a, b, c)
+largest = [4, 9, 2]
+result = max(largest)
 
-import unittest
-
-class T(unittest.TestCase):
-    def test_largest(self):
-        self.assertEqual(largest(4, 9, 2), 9)
+print(result)
