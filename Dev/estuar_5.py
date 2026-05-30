@@ -10,3 +10,9 @@ def grade(score):
         return 'D'
     else:
         return 'F'
+
+score_input = input("Enter your score: ")
+score = float(score_input) 
+
+letter_grade = grade(score)
+print(f"Your grade is: {letter_grade}")
