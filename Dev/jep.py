@@ -1,0 +1,1 @@
+print('Downtown kinaladkad ang QC kami may ari nito Eleven-o-three Hev Abi stupid tindig mo ako nag-imbento Ako may class kahit galing ghetto chicks salbahe ako ang premyo Siya pumoste sa labas humastle tangina badwords ako yung sumweldo yeah aha ')
