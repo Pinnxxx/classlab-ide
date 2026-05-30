@@ -1272,6 +1272,22 @@ return __tests;
   const $ = (id) => document.getElementById(id);
   let repoCache = null;           // resolved GitHub repo object
   let viewingClassmate = false;   // true while a read-only repo file is open
+  let viewState = null;           // {name, content, language} of the open read-only file
+
+  function langFromName(n) { return /\.js$/.test(n) ? "javascript" : "python"; }
+
+  /* What to validate/run/test right now: a classmate's open file, or your own project. */
+  function currentContext() {
+    if (viewingClassmate && viewState) {
+      return {
+        files: { [viewState.name]: viewState.content },
+        entry: viewState.name,
+        language: viewState.language,
+        readonly: true,
+      };
+    }
+    return { files: Store.files, entry: entryFile(), language: Store.language, readonly: false };
+  }
 
   function iconClass(name) {
     if (/\.py$/.test(name)) return "py";
@@ -1334,6 +1350,7 @@ return __tests;
   }
   function selectFile(name) {
     viewingClassmate = false;
+    viewState = null;
     Store.activeFile = name;
     Store.saveFiles();
     Editor.openFile(name, Store.files[name], false);
@@ -1350,16 +1367,15 @@ return __tests;
     return Object.keys(Store.files).find(runnable);
   }
 
-  /* ============ validate / run / test (local) ============ */
+  /* ============ validate / run / test (works on your file OR a read-only repo file) ============ */
   async function doValidate() {
-    if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
-    const entry = entryFile();
-    if (!entry) return Console.out("No runnable file found.", "warn");
+    const ctx = currentContext();
+    if (!ctx.entry) return Console.out("No runnable file found.", "warn");
     Editor.clearMarkers();
-    Console.header("Validate " + entry);
-    setLoading(true, "Validating " + entry + "…");
+    Console.header("Validate " + ctx.entry + (ctx.readonly ? "  (read-only)" : ""));
+    setLoading(true, "Validating " + ctx.entry + "…");
     try {
-      const r = await Runner.validate(Store.files, entry, Store.language);
+      const r = await Runner.validate(ctx.files, ctx.entry, ctx.language);
       if (r.ok) {
         Console.out("✓ No problems found. Code looks valid.", "ok");
         Console.problems("No problems detected. ✓", "ok");
@@ -1369,7 +1385,7 @@ return __tests;
           (p.line ? " line " + p.line + (p.col ? ":" + p.col : "") + " — " : " ") + p.msg);
         Console.out("Found " + r.problems.length + " problem(s):", "err");
         r.problems.forEach((p, i) => Console.out(lines[i], p.type === "warning" ? "warn" : "err"));
-        Console.problems(entry + "\n" + lines.join("\n"), "err");
+        Console.problems(ctx.entry + "\n" + lines.join("\n"), "err");
         Editor.setMarkers(r.problems);
         switchConsole("problems");
       }
@@ -1383,14 +1399,13 @@ return __tests;
   }
 
   async function doRun() {
-    if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
-    const entry = entryFile();
-    if (!entry) return Console.out("No runnable file found.", "warn");
+    const ctx = currentContext();
+    if (!ctx.entry) return Console.out("No runnable file found.", "warn");
     switchConsole("output");
-    Console.header("Run " + entry);
-    setLoading(true, "Running " + entry + "…");
+    Console.header("Run " + ctx.entry + (ctx.readonly ? "  (read-only)" : ""));
+    setLoading(true, "Running " + ctx.entry + "…");
     try {
-      const r = await Runner.run(Store.files, entry, Store.language, (s, c) => Console.out(s, c));
+      const r = await Runner.run(ctx.files, ctx.entry, ctx.language, (s, c) => Console.out(s, c));
       Console.out(r.ok ? "\n[process finished — exit 0]" : "\n[process finished — error]",
         r.ok ? "dim" : "err");
     } catch (e) { Console.out(String(e.message || e), "err"); }
@@ -1398,12 +1413,12 @@ return __tests;
   }
 
   async function doTest() {
-    if (viewingClassmate) return Console.out("Switch to your own file first.", "warn");
+    const ctx = currentContext();
     switchConsole("output");
-    Console.header("Test");
+    Console.header("Test" + (ctx.readonly ? "  (read-only)" : ""));
     setLoading(true, "Running tests…");
     try {
-      const r = await Runner.test(Store.files, Store.language, (s, c) => Console.out(s, c));
+      const r = await Runner.test(ctx.files, ctx.language, (s, c) => Console.out(s, c));
       if (r.ran != null) {
         Console.out(`\nResult: ${r.failed ? "FAILED" : "PASSED"} — ${r.ran} test(s), ${r.failed || 0} failed`,
           r.failed ? "err" : "ok");
@@ -1540,7 +1555,9 @@ return __tests;
     try {
       const content = await GitHub.getFileRaw(repo.full_name, path, branch);
       viewingClassmate = true;
+      viewState = { name: basename(path), content: content, language: langFromName(path) };
       Editor.openFile(path, content, true);
+      Console.git("Opened " + path + " (read-only). You can Run / Test / Validate it.", "info");
     } catch (e) {
       Console.git(String(e.message || e), "err");
     } finally {
