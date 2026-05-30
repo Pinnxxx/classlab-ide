@@ -12,5 +12,7 @@ class T(unittest.TestCase):
         self.assertEqual(largest(-5, -2, -10), -2) 
 
 if __name__ == '__main__':
-    # Tell unittest not to shut down the environment
+    print(f"Test run: largest(4, 9, 2) -> {largest(4, 9, 2)}")
+    print("-" * 30)
+    
     unittest.main(exit=False)
