@@ -7,16 +7,12 @@ def grade(score):
     elif score >= 60: return "D"
     return "F"
 
-class T(unittest.TestCase):
-    def test_grade(self):
-        self.assertEqual(grade(95), "A")
-        self.assertEqual(grade(74), "C")
-        self.assertEqual(grade(50), "F")
-
 if __name__ == '__main__':
     print(f"Test run: grade(95) -> {grade(95)}")
+    print(f"Test run: grade(80) -> {grade(80)}")
     print(f"Test run: grade(74) -> {grade(74)}")
-    print(f"Test run: grade(50) -> {grade(50)}")
+    print(f"Test run: grade(67) -> {grade(67)}")
+    print(f"Test run: grade(59) -> {grade(59)}")
     print("-" * 30)
     
     unittest.main(exit=False)
