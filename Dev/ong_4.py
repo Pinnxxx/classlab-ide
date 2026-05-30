@@ -3,6 +3,6 @@ def average(nums):
         return "Cannot divide by 0"
     return sum(nums) / len(nums)
 
-print(average([12, 8, 20, 16]))
-print(average([]))
-print(average([10]))
+print(average([12, 8, 20, 16]), 14.0)
+print(average([]), 0.0)
+print(average([10]), 10.0)
