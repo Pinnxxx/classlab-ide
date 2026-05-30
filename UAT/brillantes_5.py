@@ -7,4 +7,3 @@ def is_palindrome(text):
 print(is_palindrome("racecar"))
 print(is_palindrome("Hello"))
 print(is_palindrome("Was it a car or a cat I saw"))
-print(is_palindrome("A man a plan a canal Panama"))
