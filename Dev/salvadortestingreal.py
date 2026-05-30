@@ -1,13 +1,16 @@
 def run_test():
-    print("Hello, world! 🚀")
-    print("If you are reading this, your Python environment is working correctly.\n")
+    print("System test initialized.")
     
-    # A quick math operation
     x = 10
     y = 5
     result = x * y
     
-    print(f"Just to be sure, {x} multiplied by {y} is {result}.")
+    print(f"Calculation: {x} * {y} = {result}")
+    
+    if result > 40:
+        print("Status: Result exceeds 40.")
+    else:
+        print("Status: Result is 40 or less.")
 
 if __name__ == "__main__":
     run_test()
