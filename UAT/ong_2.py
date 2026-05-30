@@ -13,7 +13,7 @@ def div (a, b):
     return a / b
 
 a = 10
-b = 0
+b = 4
 
 print(f"Addition: {add(a, b)}")
 print(f"Subtraction: {sub(a, b)}")
